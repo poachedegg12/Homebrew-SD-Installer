@@ -9,10 +9,10 @@ import requests
 from pyunpack import Archive
 
 # Initial setup where the user inputs their console and other information
-print("Homebrew SD manager v0.3")
+print("Homebrew SD manager v1.0")
 print("Please type the number to select a console to homebrew:")
 print("1 - 3DS")
-# DO NOT USE THIS YET print("2 - Switch")
+print("2 - Switch")
 print("3 - DSi")
 print("4 - Wii U")
 
@@ -94,8 +94,30 @@ folder = filedialog.askdirectory(title="Select Directory to Extract Files To", i
 if folder:
     sd_path = folder
 
+    backup_path = os.path.join(sd_path, "SD_Backup")
+    if not os.path.exists(backup_path):
+        os.makedirs(backup_path)
+
+    # Copy files to the backup directory
+    for item in os.listdir(sd_path):
+        src_path = os.path.join(sd_path, item)
+        dst_path = os.path.join(backup_path, item)
+
+        # Ensure the backup folder is not copied into itself
+        if os.path.abspath(src_path) != os.path.abspath(backup_path):
+            try:
+                if os.path.isdir(src_path):
+                    shutil.copytree(src_path, dst_path)
+                else:
+                    shutil.copy2(src_path, dst_path)
+            except Exception as e:
+                print(f"Failed to backup {src_path}. Reason: {e}")
+
+    # Ensure we do not delete the backup directory during clean-up
     for filenameCTR in os.listdir(sd_path):
         file_pathCTR = os.path.join(sd_path, filenameCTR)
+        if os.path.abspath(file_pathCTR) == os.path.abspath(backup_path):
+            continue  # Skip deletion of the backup folder
         try:
             # Check if it's a file and remove it
             if os.path.isfile(file_pathCTR) or os.path.islink(file_pathCTR):
@@ -105,6 +127,7 @@ if folder:
                 shutil.rmtree(file_pathCTR)
         except Exception as e:
             print(f"Failed to delete {file_pathCTR}. Reason: {e}")
+
 
 else:
     print("No directory selected. Exiting...")
@@ -117,11 +140,11 @@ print("Files may take a while to download, please be patient.")
 def n3ds():
     # Downloading required files
     urls = [
-        "https://github.com/zoogie/super-skaterhax/releases/download/latest/release_new3ds_v1.1.zip",
-        "https://github.com/d0k3/SafeB9SInstaller/releases/download/latest/SafeB9SInstaller-20170605-122940.zip",
-        "https://github.com/SciresM/boot9strap/releases/download/latest/boot9strap-1.4.zip",
-        "https://github.com/luigoalma/nimdsphax/releases/download/latest/nimdsphax_v1.0.zip",
-        "https://github.com/LumaTeam/Luma3DS/releases/download/latest/Luma3DSv13.1.2.zip",
+        "https://github.com/zoogie/super-skaterhax/releases/latest/download/release_new3ds_v1.1.zip",
+        "https://github.com/d0k3/SafeB9SInstaller/releases/latest/download/SafeB9SInstaller-20170605-122940.zip",
+        "https://github.com/SciresM/boot9strap/releases/latest/download/boot9strap-1.4.zip",
+        "https://github.com/luigoalma/nimdsphax/releases/latest/download/nimdsphax_v1.0.zip",
+        "https://github.com/LumaTeam/Luma3DS/releases/latest/download/Luma3DSv13.1.2.zip",
     ]
 
     for url in urls:
@@ -148,9 +171,12 @@ def n3ds():
                     sys.stdout.flush()
         print("File", name, "downloaded to", sd_path)
 
-        with zipfile.ZipFile(path, "r") as zip_ref:
-            zip_ref.extractall(sd_path)
-        print(name, "extracted to", sd_path)
+        try:
+            with zipfile.ZipFile(path, "r") as zip_ref:
+                zip_ref.extractall(sd_path)
+            print(name, "extracted to", sd_path)
+        except zipfile.BadZipFile:
+            print("Skipping", name,"...")
 
         os.remove(path)
         print(name, "was removed")
@@ -243,6 +269,23 @@ def n3ds():
                 os.path.join(sd_path, "boot9strap", "boot9strap.firm.sha"))
     shutil.rmtree(os.path.join(sd_path, "SafeB9SInstaller")),
 
+    # Restore backup to the SD card
+    for item in os.listdir(backup_path):
+        src_path = os.path.join(backup_path, item)
+        dst_path = os.path.join(sd_path, item)
+        try:
+            if os.path.isdir(src_path):
+                if os.path.exists(dst_path):
+                    shutil.rmtree(dst_path)
+                shutil.copytree(src_path, dst_path)
+            else:
+                shutil.copy2(src_path, dst_path)
+        except Exception as e:
+            print(f"Failed to restore {src_path}. Reason: {e}")
+
+    # Delete the backup folder
+    shutil.rmtree(backup_path)
+
     print("Your SD card has been set up successfully. Please view the guide at "
           "https://3ds.hacks.guide/installing-boot9strap-(super-skaterhax)#section-ii---super-skaterhax to continue "
           "the homebrew method.")
@@ -252,36 +295,32 @@ def nx():
     # Selecting the directory to save the payload
     print("Please select a directory to save the payload to.")
     load = filedialog.askdirectory(title="Select Directory to Extract Files To", initialdir="/Users/12368/pytest")
+
     if load:
         desktop = load
+        payload_dir = os.path.join(desktop, "payload")
 
-        for filenameNX in os.listdir(desktop):
-            file_path_nx = os.path.join(desktop, filenameNX)
-            try:
-                # Check if it's a file and remove it
-                if os.path.isfile(file_path_nx) or os.path.islink(file_path_nx):
-                    os.unlink(file_path_nx)
-                # Check if it's a directory and remove it
-                elif os.path.isdir(file_path_nx):
-                    shutil.rmtree(file_path_nx)
-            except Exception as expt:
-                print(f"Failed to delete {file_path_nx}. Reason: {expt}")
-            if not os.path.isdir:
-                os.mkdir(os.path.join(desktop, "payload"))
+        # Check if the "payload" directory already exists
+        if not os.path.exists(payload_dir):
+            os.mkdir(payload_dir)  # Create the directory if it does not exist
+            print(f"Created directory: {payload_dir}")
+        else:
+            print(f"Directory already exists: {payload_dir}")
 
     else:
         print("No directory selected. Exiting...")
         exit()
+
     # Downloading required files
     urls = [
-        "https://github.com/eliboa/TegraRcmGUI/releases/download/latest/TegraRcmGUI_v2.6_Installer.msi",
-        "https://github.com/CTCaer/hekate/releases/download/latest/hekate_ctcaer_6.2.1_Nyx_1.6.3.zip",
-        "https://github.com/pbatard/libwdi/releases/download/latest/zadig-2.9.exe"
+        "https://github.com/eliboa/TegraRcmGUI/releases/latest/download/TegraRcmGUI_v2.6_Installer.msi",
+        "https://github.com/CTCaer/hekate/releases/latest/download/hekate_ctcaer_6.2.1_Nyx_1.6.3.zip",
+        "https://github.com/pbatard/libwdi/releases/latest/download/zadig-2.9.exe"
     ]
 
     for url in urls:
         name = url.split("/")[-1]
-        path = os.path.join(desktop, name)
+        path = os.path.join(desktop, "payload", name)
 
         r = requests.get(url)
         with open(path, 'wb') as f:
@@ -330,13 +369,13 @@ def nx():
         "https://switch.hacks.guide/files/emu/hekate_ipl.ini",
         "https://switch.hacks.guide/files/emummc.txt",
         "https://switch.hacks.guide/files/bootlogos.zip",
-        "https://github.com/Atmosphere-NX/Atmosphere/releases/download/latest/atmosphere-1.7.1-master-39c201e37"
+        "https://github.com/Atmosphere-NX/Atmosphere/releases/latest/download/atmosphere-1.7.1-master-39c201e37"
         "+hbl-2.4.4+hbmenu-3.6.0.zip",
-        "https://github.com/mtheall/ftpd/releases/download/latest/ftpd.nro",
-        "https://github.com/J-D-K/JKSV/releases/download/latest/JKSV.nro",
-        "https://github.com/exelix11/SwitchThemeInjector/releases/download/latest/NXThemesInstaller.nro",
-        "https://github.com/joel16/NX-Shell/releases/download/latest/NX-Shell.nro",
-        "https://github.com/XorTroll/Goldleaf/releases/download/latest/Goldleaf.nro"
+        "https://github.com/mtheall/ftpd/releases/latest/download/ftpd.nro",
+        "https://github.com/J-D-K/JKSV/releases/latest/download/JKSV.nro",
+        "https://github.com/exelix11/SwitchThemeInjector/releases/latest/download/NXThemesInstaller.nro",
+        "https://github.com/joel16/NX-Shell/releases/latest/download/NX-Shell.nro",
+        "https://github.com/XorTroll/Goldleaf/releases/latest/download/Goldleaf.nro"
     ]
 
     for url in urls:
@@ -376,6 +415,22 @@ def nx():
     shutil.move(sd_path + "/hekate_ipl.ini", sd_path + "/bootloader/hekate_ipl.ini")
     os.mkdir(sd_path + "/atmosphere/hosts")
     shutil.move(sd_path + "/emummc.txt", sd_path + "/atmosphere/hosts/emummc.txt")
+
+    for item in os.listdir(backup_path):
+        src_path = os.path.join(backup_path, item)
+        dst_path = os.path.join(sd_path, item)
+        try:
+            if os.path.isdir(src_path):
+                if os.path.exists(dst_path):
+                    shutil.rmtree(dst_path)
+                shutil.copytree(src_path, dst_path)
+            else:
+                shutil.copy2(src_path, dst_path)
+        except Exception as e:
+            print(f"Failed to restore {src_path}. Reason: {e}")
+
+    # Delete the backup folder
+    shutil.rmtree(backup_path)
     # Moving Nintendo folder if emuMMC was chosen
     if mmc == "E":
         if os.path.isdir(sd_path + "/Nintendo"):
@@ -422,6 +477,23 @@ def ds():
 
             os.remove(path)
             print(name, "was removed")
+
+        for item in os.listdir(backup_path):
+            src_path = os.path.join(backup_path, item)
+            dst_path = os.path.join(sd_path, item)
+            try:
+                if os.path.isdir(src_path):
+                    if os.path.exists(dst_path):
+                        shutil.rmtree(dst_path)
+                    shutil.copytree(src_path, dst_path)
+                else:
+                    shutil.copy2(src_path, dst_path)
+            except Exception as e:
+                print(f"Failed to restore {src_path}. Reason: {e}")
+
+        # Delete the backup folder
+        shutil.rmtree(backup_path)
+
     print("Your SD card has been setup, please continue the guide from "
           "https://dsi.cfw.guide/get-started.html#section-ii-selecting-an-exploit.")
 
@@ -464,6 +536,22 @@ def wiiu():
             os.remove(path)
             print(name, "was removed")
 
+            for item in os.listdir(backup_path):
+                src_path = os.path.join(backup_path, item)
+                dst_path = os.path.join(sd_path, item)
+                try:
+                    if os.path.isdir(src_path):
+                        if os.path.exists(dst_path):
+                            shutil.rmtree(dst_path)
+                        shutil.copytree(src_path, dst_path)
+                    else:
+                        shutil.copy2(src_path, dst_path)
+                except Exception as e:
+                    print(f"Failed to restore {src_path}. Reason: {e}")
+
+            # Delete the backup folder
+            shutil.rmtree(backup_path)
+
     print("Your SD card has been setup, please continue the guide from "
           "https://wiiu.hacks.guide/#/aroma/browser-exploit.")
 
@@ -473,7 +561,7 @@ def wiiu():
 if console == "n3ds":
     n3ds()
 elif console == "nx":
-    # nx()
+    nx()
 elif console == "ds":
     ds()
 elif console == "wiiu":
